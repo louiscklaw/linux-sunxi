@@ -15,6 +15,7 @@
 
 #include <linux/export.h>
 #include <linux/acpi.h>
+#include <linux/mfd/intel_soc_pmic.h>
 #include <linux/regmap.h>
 #include <acpi/acpi_lpat.h>
 #include "intel_pmic.h"
@@ -35,6 +36,8 @@ struct intel_pmic_opregion {
 	struct intel_pmic_opregion_data *data;
 	struct intel_pmic_regs_handler_ctx ctx;
 };
+
+static struct intel_pmic_opregion *intel_pmic_opregion;
 
 static int pmic_get_reg_bit(int address, struct pmic_table *table,
 			    int count, int *reg, int *bit)
@@ -304,6 +307,7 @@ int intel_pmic_install_opregion_handler(struct device *dev, acpi_handle handle,
 	}
 
 	opregion->data = d;
+	intel_pmic_opregion = opregion;
 	return 0;
 
 out_remove_thermal_handler:
@@ -319,3 +323,24 @@ out_error:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(intel_pmic_install_opregion_handler);
+
+void intel_soc_pmic_exec_mipi_pmic_seq_element(const u8 *data)
+{
+	struct intel_pmic_opregion_data *d;
+
+	if (!intel_pmic_opregion) {
+		pr_warn("%s: No PMIC registered\n", __func__);
+		return;
+	}
+
+	d = intel_pmic_opregion->data;
+	if (!d->exec_mipi_pmic_seq_element) {
+		pr_warn("%s: Not implemented\n", __func__);
+		return;
+	}
+
+	mutex_lock(&intel_pmic_opregion->lock);
+	d->exec_mipi_pmic_seq_element(intel_pmic_opregion->regmap, data);
+	mutex_unlock(&intel_pmic_opregion->lock);
+}
+EXPORT_SYMBOL_GPL(intel_soc_pmic_exec_mipi_pmic_seq_element);
